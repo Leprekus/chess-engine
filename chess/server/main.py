@@ -2,11 +2,11 @@ from fastapi import FastAPI, WebSocket, WebSocketException, WebSocketDisconnect
 from starlette.websockets import WebSocketClose
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from illegal_match_access_error import IllegalMatchAccessException
-from match_making import Match, MatchMaking
+from .illegal_match_access_error import IllegalMatchAccessException 
+from .match_making import Match
 
 app = FastAPI()
-mm = MatchMaking()
+match = Match()
 
 
 @app.get('/')
@@ -17,27 +17,26 @@ async def root():
     FLOW
         1. Player 1 hits /pvp/create-game, which creates a match instance and returns a session_id and player_id.
         2. Player 1 gets redirected to /pvp/{session_id}.
-        3. Player 2 accepts the invite link, which hits /pvp/join-game, passing the session_id and creating a 2nd player_id.
-        4. Player 2 gets redirected to /pvp/{session_id}.
-        5. /pvp/{session_id} handles the game until the match is over.
+        3. Player 2 accepts the invite link which cointans p2_id and joins /pvp/{session_id} providing p2_id.
+        4. /pvp/{session_id} handles the game until the match is over.
 '''
 
 @app.post('/pvp/create-game')
 async def pvp_create_game():
-    session_id, player_id = mm.create_game()
-    return { 'session_id': session_id, 'player_id': player_id }
+    '''
+        creates a game and returns both players ids.
+        P1 client is then in charge of generating an invite link
+        and sharing it with P2.
+    '''
+    session_id, player1_id = match.create_game()
+    return { 'session_id': session_id, 'player_id': player1_id }
 
-@app.post('/pvp/join-game')
-async def pvp_join_game(session_id: str):
-    player_id:str = mm.join_game(session_id)
-    return { 'player_id': player_id }
 
 @app.websocket('/pvp/{session_id}')
-async def pvp(ws: WebSocket, session_id: str):
+async def pvp(ws: WebSocket, session_id: str, player_id: str):
     try:
-
-        await ws.accept()
-        match: Match = mm.get_game(session_id)
+        #await ws.accept()
+        await match.socket_handler(session_id, player_id, ws)
 
         while True:
             player_data = await ws.receive_json()
@@ -53,13 +52,13 @@ async def pvp(ws: WebSocket, session_id: str):
             
 
     except WebSocketException:
-            print(f'')
+            print(f'WebSocketException {WebSocketException}')
 
     except IllegalMatchAccessException:
-            print(f'')
+            print(f'{IllegalMatchAccessException}')
 
     except Exception as e:
-            print(f'')
+            print(f'Exception {e}')
 
 @app.get('/pve/{session_id}')
 async def pve():
